@@ -10,7 +10,7 @@ import {
   loadProjects, loadSettings, previewDoc, saveProject, saveSettings, type Project, type Settings,
 } from "@/lib/client";
 import { STREAM_ERROR } from "@/lib/sse";
-import SettingsModal from "./SettingsModal";
+import AiPicker, { type AiPickerHandle } from "./AiPicker";
 
 type Phase = "idle" | "scraping" | "generating" | "done" | "error";
 type Device = "iphone" | "android" | "tablet";
@@ -29,7 +29,6 @@ const EXAMPLES = [
 
 export default function Studio() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [mode, setMode] = useState<"url" | "prompt">("url");
   const [url, setUrl] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -57,6 +56,7 @@ export default function Studio() {
   const [kitReady, setKitReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const aiRef = useRef<AiPickerHandle>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
@@ -64,7 +64,6 @@ export default function Studio() {
     const s = loadSettings();
     setSettings(s);
     setProjects(loadProjects());
-    if (!Object.values(s.keys).some(Boolean) && s.providerId !== "claude-code") setSettingsOpen(true);
   }, []);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
@@ -207,7 +206,7 @@ export default function Studio() {
     if (mode === "url" && !url.trim()) return setError("Enter a website URL to convert.");
     if (mode === "prompt" && !prompt.trim()) return setError("Describe the app you want.");
     if (!isHandoff && !apiKey && provider.id !== "custom") {
-      setSettingsOpen(true);
+      aiRef.current?.focusKey();
       return setError(`Add your ${provider.name} API key to continue.`);
     }
     try {
@@ -299,13 +298,13 @@ export default function Studio() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="logo" aria-hidden>▱</span>
+          <span className="logo" aria-hidden>&gt;_</span>
           <span>mobile<b>.do</b></span>
           <span className="tag">URL or idea → mobile app</span>
         </div>
-        <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
-          <span aria-hidden>🔑</span> API keys
-        </button>
+        <span className="byok" title="API keys never leave your browser except to reach your provider">
+          <span className="dot on" aria-hidden /> BYOK · keys stay local
+        </span>
       </header>
 
       <main className="workspace">
@@ -356,43 +355,15 @@ export default function Studio() {
             <input value={appName} placeholder="Auto" onChange={(e) => setAppName(e.target.value)} />
           </label>
 
-          <div className="field">
-            <span>AI provider</span>
-            <div className="row">
-              <select
-                value={provider.id}
-                onChange={(e) => updateSettings({ providerId: e.target.value })}
-                aria-label="AI provider"
-              >
-                {PROVIDERS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}{p.kind !== "handoff" && !settings.keys[p.id] && p.id !== "custom" ? " — no key" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {!isHandoff && (
-            <div className="field">
-              <span>Model</span>
-              <div className="row">
-                <input
-                  list="model-options"
-                  value={model}
-                  onChange={(e) => updateSettings({ models: { ...settings.models, [provider.id]: e.target.value } })}
-                  aria-label="Model"
-                />
-                <datalist id="model-options">
-                  {modelOptions.map((m) => <option key={m} value={m} />)}
-                </datalist>
-                <button className="btn icon" title="Fetch available models" aria-label="Fetch available models" onClick={fetchModels} disabled={modelsBusy}>
-                  {modelsBusy ? "…" : "↻"}
-                </button>
-              </div>
-            </div>
-          )}
-          {provider.note && <p className="hint">{provider.note}</p>}
+          <AiPicker
+            ref={aiRef}
+            settings={settings}
+            onChange={updateSettings}
+            model={model}
+            modelOptions={modelOptions}
+            modelsBusy={modelsBusy}
+            onFetchModels={fetchModels}
+          />
 
           <details className="advanced">
             <summary>Advanced</summary>
@@ -534,9 +505,6 @@ export default function Studio() {
         </section>
       </main>
 
-      {settingsOpen && (
-        <SettingsModal settings={settings} onChange={updateSettings} onClose={() => setSettingsOpen(false)} />
-      )}
     </div>
   );
 }
