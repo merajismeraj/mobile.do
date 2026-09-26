@@ -23,6 +23,9 @@ export interface Project {
   brief: string;
   source: string;
   createdAt: number;
+  /** Hosted app id once published. */
+  appId?: string;
+  appUrl?: string;
 }
 
 const SETTINGS_KEY = "mobiledo.settings.v1";
@@ -87,7 +90,7 @@ export function previewDoc(html: string): string {
   return PREVIEW_SHIM + html;
 }
 
-async function svgToPng(svg: string, size: number): Promise<Uint8Array> {
+export async function svgToPng(svg: string, size: number): Promise<Uint8Array> {
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   try {
     const img = new Image();
@@ -181,4 +184,66 @@ ${SYSTEM_PROMPT.replace(/^[\s\S]*?MOBILE APP QUALITY BAR\n/, "")}
   ];
   if (opts.site) entries.push({ path: "site.json", data: JSON.stringify(opts.site, null, 2) });
   return { zip: createZip(entries.map((e) => ({ ...e, path: `${meta.slug}/${e.path}` }))), meta };
+}
+
+export interface Me {
+  user: { email: string; name: string | null; avatar: string | null } | null;
+  plan?: "free" | "pro" | "scale";
+  limit?: number;
+  used?: number;
+  subscription?: { status: string | null; periodEnd: string | null; plan: string };
+  features: { accounts: boolean; billing: boolean; domains: boolean };
+}
+
+export async function fetchMe(): Promise<Me> {
+  try {
+    const res = await fetch("/api/me", { cache: "no-store" });
+    if (res.ok) return await res.json();
+  } catch {
+    /* offline */
+  }
+  return { user: null, features: { accounts: false, billing: false, domains: false } };
+}
+
+const toBase64 = (bytes: Uint8Array) => {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+
+/** Payload for POST/PATCH /api/apps, including rendered PNG icons. */
+export async function publishPayload(html: string, appName: string | undefined, brief: string, source: string) {
+  const meta = deriveMeta(html, appName);
+  const svg = iconSvg(meta);
+  const [p192, p512] = await Promise.all([svgToPng(svg, 192), svgToPng(svg, 512)]);
+  return {
+    name: meta.name,
+    html,
+    themeColor: meta.themeColor,
+    icon192: toBase64(p192),
+    icon512: toBase64(p512),
+    brief,
+    source,
+  };
+}
+
+let cashfreeScript: Promise<void> | null = null;
+
+/** Opens Cashfree's hosted subscription checkout for a session from /api/billing/subscribe. */
+export async function openCashfreeCheckout(sessionId: string, mode: "sandbox" | "production") {
+  cashfreeScript ??= new Promise<void>((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+    s.onload = () => resolve();
+    s.onerror = () => {
+      cashfreeScript = null;
+      reject(new Error("Could not load Cashfree checkout. Check your connection or ad blocker."));
+    };
+    document.head.appendChild(s);
+  });
+  await cashfreeScript;
+  const factory = (window as unknown as { Cashfree?: (o: { mode: string }) => { subscriptionsCheckout?: (o: object) => Promise<unknown> } }).Cashfree;
+  const cashfree = factory?.({ mode });
+  if (!cashfree?.subscriptionsCheckout) throw new Error("Cashfree checkout is unavailable.");
+  await cashfree.subscriptionsCheckout({ subsSessionId: sessionId, redirectTarget: "_self" });
 }

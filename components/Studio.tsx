@@ -7,10 +7,11 @@ import { buildRefinePrompt, buildUserPrompt, type BuildBrief } from "@/lib/promp
 import { extractHtml, isCompleteHtml, slugify } from "@/lib/pack";
 import {
   CLAUDE_CODE_COMMAND, DEFAULT_SETTINGS, buildClaudeCodeKit, buildProjectZip, deleteProject, download,
-  loadProjects, loadSettings, previewDoc, saveProject, saveSettings, type Project, type Settings,
+  loadProjects, loadSettings, previewDoc, publishPayload, saveProject, saveSettings, type Me, type Project, type Settings,
 } from "@/lib/client";
 import { STREAM_ERROR } from "@/lib/sse";
 import AiPicker, { type AiPickerHandle } from "./AiPicker";
+import AccountMenu from "./AccountMenu";
 
 type Phase = "idle" | "scraping" | "generating" | "done" | "error";
 type Device = "iphone" | "android" | "tablet";
@@ -54,6 +55,10 @@ export default function Studio() {
   const [fetchedModels, setFetchedModels] = useState<Record<string, string[]>>({});
   const [modelsBusy, setModelsBusy] = useState(false);
   const [kitReady, setKitReady] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
+  const [remote, setRemote] = useState<{ id: string; url: string } | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [upgradeHint, setUpgradeHint] = useState(false);
   const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const aiRef = useRef<AiPickerHandle>(null);
@@ -63,7 +68,17 @@ export default function Studio() {
   useEffect(() => {
     const s = loadSettings();
     setSettings(s);
-    setProjects(loadProjects());
+    const list = loadProjects();
+    setProjects(list);
+    // Back from sign-in during publish: reopen the project that was being published.
+    const open = new URLSearchParams(window.location.search).get("open");
+    const p = open && list.find((x) => x.id === open);
+    if (p) {
+      openProject(p);
+      setStatus(`Signed in. Hit “Publish ↑” to put “${p.name}” live.`);
+      window.history.replaceState(null, "", "/");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
@@ -195,7 +210,10 @@ export default function Studio() {
     const name =
       meta.name || appName || next.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || "Untitled app";
     setProjects(
-      saveProject({ id, name, html: next, brief: meta.brief ?? brief, source: meta.source ?? source, createdAt: Date.now() }),
+      saveProject({
+        id, name, html: next, brief: meta.brief ?? brief, source: meta.source ?? source, createdAt: Date.now(),
+        appId: remote?.id, appUrl: remote?.url,
+      }),
     );
   }
 
@@ -229,6 +247,7 @@ export default function Studio() {
 
       setProjectId("");
       setVersions([]);
+      setRemote(null);
       const out = await stream(userPrompt, "Generating");
       commit(out, { brief: userPrompt, source: src, name: appName });
       setStatus("Ready — preview, refine, or download.");
@@ -274,7 +293,40 @@ export default function Studio() {
     download(`${meta.slug}.zip`, zip, "application/zip");
   }
 
+  async function publish() {
+    setError("");
+    setUpgradeHint(false);
+    if (!me?.features.accounts) return setError("Publishing isn't configured on this deployment.");
+    if (!me.user) {
+      window.location.href = `/auth/login?next=${encodeURIComponent(`/?open=${projectId}`)}`;
+      return;
+    }
+    setPublishing(true);
+    try {
+      const payload = await publishPayload(html, appName || undefined, brief, source);
+      const send = (method: string, url: string) =>
+        fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      let res = remote ? await send("PATCH", `/api/apps/${remote.id}`) : await send("POST", "/api/apps");
+      if (remote && res.status === 404) res = await send("POST", "/api/apps");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 402) setUpgradeHint(true);
+        throw new Error(json.error ?? "Publish failed.");
+      }
+      const next = { id: json.app.id as string, url: json.app.url as string };
+      setRemote(next);
+      const current = loadProjects().find((p) => p.id === projectId);
+      if (current) setProjects(saveProject({ ...current, html, appId: next.id, appUrl: next.url }));
+      setStatus(`Live at ${next.url}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Publish failed.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   function openProject(p: Project) {
+    setRemote(p.appId && p.appUrl ? { id: p.appId, url: p.appUrl } : null);
     setProjectId(p.id);
     setHtml(p.html);
     setVersions([p.html]);
@@ -302,9 +354,12 @@ export default function Studio() {
           <span>mobile<b>.do</b></span>
           <span className="tag">URL or idea → mobile app</span>
         </div>
-        <span className="byok" title="API keys never leave your browser except to reach your provider">
-          <span className="dot on" aria-hidden /> BYOK · keys stay local
-        </span>
+        <div className="topbar-right">
+          <span className="byok" title="API keys never leave your browser except to reach your provider">
+            <span className="dot on" aria-hidden /> BYOK · keys stay local
+          </span>
+          <AccountMenu onMe={setMe} />
+        </div>
       </header>
 
       <main className="workspace">
@@ -400,6 +455,7 @@ export default function Studio() {
             {status && <p>{status}</p>}
             {warning && <p className="warn">{warning}</p>}
             {error && <p className="err" role="alert">{error}</p>}
+            {upgradeHint && <p><a href="/pricing">See plans →</a></p>}
           </div>
 
           {kitReady && (
@@ -450,8 +506,16 @@ export default function Studio() {
             >
               HTML
             </button>
-            <button className="btn accent" disabled={!html || busy} onClick={downloadZip} title="PWA + iOS/Android (Capacitor) project">
-              Download app ↓
+            <button className="btn ghost" disabled={!html || busy} onClick={downloadZip} title="PWA + iOS/Android (Capacitor) project">
+              Download ↓
+            </button>
+            {remote && (
+              <a className="btn ghost live-link" href={remote.url} target="_blank" rel="noreferrer" title={remote.url}>
+                <span className="dot on" aria-hidden /> live ↗
+              </a>
+            )}
+            <button className="btn accent" disabled={!html || busy || publishing} onClick={publish} title="Host this app at a live URL">
+              {publishing ? "Publishing…" : remote ? "Update live app" : "Publish ↑"}
             </button>
           </div>
 

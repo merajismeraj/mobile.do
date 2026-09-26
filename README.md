@@ -71,6 +71,42 @@ lib/zip.ts         dependency-free zip writer
 components/        Studio UI + BYOK settings
 ```
 
+## Plans, accounts and hosting
+
+| Plan | Price | Hosted apps |
+|---|---|---|
+| Free | ₹0 | 1 |
+| Pro | ₹2,499 / month | 5 |
+| Scale | ₹8,499 / month | 25 |
+
+Generating is always free (users bring their own AI key). Plans limit how many apps a user keeps **published**. Every hosted app gets a URL on `APPS_HOST` and can have its own custom domain.
+
+- **Accounts:** Google sign-in through Supabase Auth.
+- **Quota:** enforced in Postgres by a trigger (`enforce_app_quota`), so it holds even under concurrent requests.
+- **Billing:** Cashfree Subscriptions, charged monthly in INR by UPI Autopay, card or eNACH. After cancelling, users keep the plan until the end of the paid month. If a plan lapses, only the oldest N apps keep running and the rest show a "paused" page. Nothing is deleted.
+- **Isolation:** hosted apps are served from `APPS_HOST` or the app's custom domain, never from the studio origin. Their code therefore can't read the studio session or the API keys in its localStorage.
+
+### Setup
+
+All variables are listed in `.env.example`. Set them in Vercel → Project → Settings → Environment Variables.
+
+1. **Supabase**
+   - Create a project.
+   - Run `supabase/migrations/0001_billing_and_hosting.sql` in the SQL editor.
+   - Copy the project URL, the anon key and the service-role key.
+2. **Google sign-in**
+   - In Google Cloud, create an OAuth client (type: Web application). Set its authorised redirect URI to `https://<project>.supabase.co/auth/v1/callback`.
+   - In Supabase → Authentication → Providers → Google, paste the client ID and secret.
+   - In Supabase → Authentication → URL Configuration, set Site URL to `APP_URL` and add `APP_URL/auth/callback` to the redirect URLs.
+3. **Cashfree**
+   - Enable Subscriptions on your account, then copy the App ID and Secret Key (use sandbox keys first).
+   - Add a webhook for subscription events pointing to `APP_URL/api/billing/webhook`.
+   - The plans (`mobiledo_pro_inr_2499_monthly`, `mobiledo_scale_inr_8499_monthly`) are created automatically on the first checkout.
+4. **Apps host:** add `APPS_HOST` (for example `mobile-do-apps.vercel.app`) as a domain on this Vercel project.
+5. **Custom domains:** create a Vercel access token scoped to this team. Users then connect domains from their dashboard and are shown the DNS records to add.
+
+Each feature switches itself off cleanly while its variables are missing: the studio keeps working, and pricing shows "coming soon".
+
 ## Deployment
 
 Production: https://mobile-do.vercel.app, deployed from `main` on every merge.
