@@ -70,3 +70,8 @@ lib/pack.ts        PWA/Capacitor packaging
 lib/zip.ts         dependency-free zip writer
 components/        Studio UI + BYOK settings
 ```
+
+## Deployment
+
+Production: https://mobile-do.vercel.app, deployed from `main` on every merge.
+Any other branch gets its own preview URL.
