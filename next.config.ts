@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Hosted apps live at /<slug>/ and rely on the trailing slash for relative asset URLs.
+  skipTrailingSlashRedirect: true,
   async headers() {
     return [
       {
