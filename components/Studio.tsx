@@ -12,6 +12,7 @@ import {
 import { STREAM_ERROR } from "@/lib/sse";
 import AiPicker, { type AiPickerHandle } from "./AiPicker";
 import AccountMenu from "./AccountMenu";
+import { PLANS, formatInr } from "@/lib/plans";
 
 type Phase = "idle" | "scraping" | "generating" | "done" | "error";
 type Device = "iphone" | "android" | "tablet";
@@ -99,6 +100,9 @@ export default function Studio() {
     [fetchedModels, provider],
   );
   const busy = phase === "scraping" || phase === "generating";
+  // Downloads, code view and hosting are Pro once payments are configured on this deployment.
+  const locked = !!me?.features.accounts && !!me.features.billing && !me.downloads;
+  const [paywall, setPaywall] = useState<null | "download" | "code" | "kit" | "publish">(null);
   const shownHtml = phase === "generating" ? streamHtml : html;
   const dev = DEVICES[device];
 
@@ -223,6 +227,7 @@ export default function Studio() {
     setKitReady(false);
     if (mode === "url" && !url.trim()) return setError("Enter a website URL to convert.");
     if (mode === "prompt" && !prompt.trim()) return setError("Describe the app you want.");
+    if (isHandoff && locked) return setPaywall("kit");
     if (!isHandoff && !apiKey && provider.id !== "custom") {
       aiRef.current?.focusKey();
       return setError(`Add your ${provider.name} API key to continue.`);
@@ -289,6 +294,7 @@ export default function Studio() {
   }
 
   async function downloadZip() {
+    if (locked) return setPaywall("download");
     const { zip, meta } = await buildProjectZip({ html, appName, brief, source, site });
     download(`${meta.slug}.zip`, zip, "application/zip");
   }
@@ -297,6 +303,7 @@ export default function Studio() {
     setError("");
     setUpgradeHint(false);
     if (!me?.features.accounts) return setError("Publishing isn't configured on this deployment.");
+    if (locked) return setPaywall("publish");
     if (!me.user) {
       window.location.href = `/auth/login?next=${encodeURIComponent(`/?open=${projectId}`)}`;
       return;
@@ -502,7 +509,7 @@ export default function Studio() {
             <button
               className="btn ghost"
               disabled={!html || busy}
-              onClick={() => download(`${slugify(appName || "index")}.html`, html, "text/html")}
+              onClick={() => (locked ? setPaywall("download") : download(`${slugify(appName || "index")}.html`, html, "text/html"))}
             >
               HTML
             </button>
@@ -537,6 +544,14 @@ export default function Studio() {
                 <Empty busy={busy} />
               )}
             </div>
+          ) : locked ? (
+            <div className="stage locked-code">
+              <div className="empty">
+                <h2>Source code is part of Pro</h2>
+                <p>Preview and refine for free. Upgrade to view, edit and download the code.</p>
+                <p><button className="btn primary" onClick={() => setPaywall("code")}>unlock with Pro</button></p>
+              </div>
+            </div>
           ) : (
             <textarea
               className="code"
@@ -569,7 +584,43 @@ export default function Studio() {
         </section>
       </main>
 
+      {paywall && <Paywall reason={paywall} signedIn={!!me?.user} onClose={() => setPaywall(null)} />}
     </div>
+  );
+}
+
+const PAYWALL_COPY = {
+  download: "Downloading apps is part of Pro.",
+  code: "Viewing and editing source code is part of Pro.",
+  kit: "Claude Code build kits are part of Pro.",
+  publish: "Hosting apps at a live URL is part of Pro.",
+} as const;
+
+function Paywall({ reason, signedIn, onClose }: { reason: keyof typeof PAYWALL_COPY; signedIn: boolean; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (!ref.current?.open) ref.current?.showModal();
+  }, []);
+  const pro = PLANS.pro;
+  const target = "/pricing?plan=pro";
+  const href = signedIn ? target : `/auth/login?next=${encodeURIComponent(target)}`;
+  return (
+    <dialog ref={ref} className="modal" onClose={onClose} aria-labelledby="paywall-title">
+      <div className="modal-body">
+        <h2 id="paywall-title">{PAYWALL_COPY[reason]}</h2>
+        <p className="hint">
+          Pro is {formatInr(pro.priceInr)}/month (about $30) for unlimited apps. Cancel anytime. Your current app is saved in
+          this browser and will be waiting for you.
+        </p>
+        <ul className="paywall-list">
+          {pro.features.map((f) => <li key={f}>{f}</li>)}
+        </ul>
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={onClose}>not now</button>
+          <a className="btn primary" href={href}>{signedIn ? "get Pro" : "sign in to get Pro"}</a>
+        </div>
+      </div>
+    </dialog>
   );
 }
 

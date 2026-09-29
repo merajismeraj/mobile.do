@@ -17,18 +17,21 @@ export interface Account {
   profile: Profile;
   /** Plan the user is entitled to right now (paid plans lapse to free). */
   plan: PlanId;
+  /** Hosted apps allowed (Infinity = unlimited). */
   limit: number;
   used: number;
+  downloads: boolean;
 }
 
 export async function getAccount(userId: string): Promise<Account> {
   const db = supabaseAdmin();
-  const [{ data: profile, error }, { data: plan }, { count }] = await Promise.all([
+  const [{ data: profile, error }, { data: planId }, { count }] = await Promise.all([
     db.from("profiles").select("*").eq("id", userId).single<Profile>(),
     db.rpc("effective_plan", { uid: userId }),
     db.from("apps").select("id", { count: "exact", head: true }).eq("user_id", userId),
   ]);
   if (error || !profile) throw new Error(`profile missing for ${userId}: ${error?.message}`);
-  const effective = ((plan as string) ?? "free") as PlanId;
-  return { profile, plan: effective, limit: PLANS[effective].apps, used: count ?? 0 };
+  const effective = ((planId as string) ?? "free") as PlanId;
+  const plan = PLANS[effective] ?? PLANS.free;
+  return { profile, plan: plan.id, limit: plan.apps, used: count ?? 0, downloads: plan.downloads };
 }

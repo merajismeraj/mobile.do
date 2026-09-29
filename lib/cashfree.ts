@@ -74,7 +74,7 @@ export async function ensurePlan(plan: Plan): Promise<string> {
       plan_max_cycles: 120,
       plan_intervals: 1,
       plan_interval_type: "MONTH",
-      plan_note: `${plan.apps} hosted apps per month`,
+      plan_note: "Unlimited apps, downloads and hosting",
     },
   });
   return planId;
@@ -115,10 +115,10 @@ export async function createSubscription(opts: {
 
 export const getSubscription = (id: string) => cf<CfSubscription>(`/subscriptions/${encodeURIComponent(id)}`);
 
-export async function manageSubscription(id: string, action: "CANCEL" | "CHANGE_PLAN", planId?: string) {
+export async function manageSubscription(id: string, action: "CANCEL") {
   return cf<CfSubscription>(`/subscriptions/${encodeURIComponent(id)}/manage`, {
     method: "POST",
-    body: { subscription_id: id, action, ...(planId ? { action_details: { plan_id: planId } } : {}) },
+    body: { subscription_id: id, action },
   });
 }
 

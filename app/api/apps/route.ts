@@ -22,7 +22,7 @@ export async function GET() {
       domainUrl: a.custom_domain ? appPublicUrl(a.slug, a.custom_domain) : null,
       running: i < account.limit,
     }));
-    return Response.json({ apps, plan: account.plan, limit: account.limit, used: account.used });
+    return Response.json({ apps, plan: account.plan, limit: Number.isFinite(account.limit) ? account.limit : null, used: account.used });
   } catch (err) {
     return errorResponse(err);
   }

@@ -8,7 +8,7 @@ const DAY = 86400_000;
 interface SubRow {
   id: string;
   user_id: string;
-  plan: "pro" | "scale";
+  plan: "pro";
   status: string;
 }
 

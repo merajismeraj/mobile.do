@@ -9,7 +9,7 @@ create table if not exists public.profiles (
   email               text,
   full_name           text,
   avatar_url          text,
-  plan                text not null default 'free' check (plan in ('free', 'pro', 'scale')),
+  plan                text not null default 'free' check (plan in ('free', 'pro')),
   subscription_id     text,
   subscription_status text,
   -- Paid access continues until this time after a cancel (end of paid period).
@@ -48,7 +48,7 @@ create trigger on_auth_user_created
 create table if not exists public.subscriptions (
   id                 text primary key,           -- subscription_id we sent to Cashfree
   user_id            uuid not null references public.profiles (id) on delete cascade,
-  plan               text not null check (plan in ('pro', 'scale')),
+  plan               text not null check (plan = 'pro'),
   status             text not null default 'INITIALIZED',
   cf_subscription_id text,
   next_charge_at     timestamptz,
@@ -85,7 +85,8 @@ returns int
 language sql
 immutable
 as $$
-  select case p when 'scale' then 25 when 'pro' then 5 else 1 end;
+  -- free: 0 hosted apps (generate + preview only); pro: unlimited.
+  select case p when 'pro' then 2147483647 else 0 end;
 $$;
 
 -- Effective plan: paid plans count while ACTIVE, or until period_end after a cancel.
@@ -132,7 +133,7 @@ begin
   select count(*) into used from public.apps where user_id = new.user_id;
   lim := public.app_limit(new.user_id);
   if used >= lim then
-    raise exception 'APP_LIMIT_REACHED: your plan allows % hosted app(s)', lim using errcode = 'P0001';
+    raise exception 'APP_LIMIT_REACHED: %', case when lim = 0 then 'Publishing apps needs Pro' else format('your plan allows %s hosted apps', lim) end using errcode = 'P0001';
   end if;
   return new;
 end;

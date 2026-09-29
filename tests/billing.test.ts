@@ -7,7 +7,7 @@ import { PGlite } from "@electric-sql/pglite";
 import {
   cashfreePlanId, createSubscription, entitlementFor, findSubscriptionId, manageSubscription, planFromId, verifyWebhook,
 } from "../lib/cashfree.ts";
-import { PLANS } from "../lib/plans.ts";
+import { PLANS, UNLIMITED_SQL } from "../lib/plans.ts";
 import { normalizeDomain } from "../lib/domains.ts";
 import { safeNext } from "../lib/redirect.ts";
 
@@ -115,7 +115,7 @@ test("status → entitlement mapping", () => {
   assert.equal(entitlementFor("ON_HOLD").kind, "revoke");
   assert.equal(entitlementFor("BANK_APPROVAL_PENDING").kind, "pending");
   assert.equal(entitlementFor(undefined).kind, "pending");
-  assert.equal(planFromId(cashfreePlanId(PLANS.scale))?.id, "scale");
+  assert.equal(planFromId(cashfreePlanId(PLANS.pro))?.id, "pro");
   assert.equal(planFromId("something_else"), undefined);
 });
 
@@ -125,12 +125,17 @@ test("TS plan limits match the SQL source of truth", async () => {
     create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb);
     create function auth.uid() returns uuid language sql as $$ select null::uuid $$;`);
   await pg.exec(readFileSync(new URL("../supabase/migrations/0001_billing_and_hosting.sql", import.meta.url), "utf8"));
+  const limits: Record<string, number> = {};
   for (const p of Object.values(PLANS)) {
     const { rows } = await pg.query<{ n: number }>(`select public.plan_app_limit($1) as n`, [p.id]);
-    assert.equal(rows[0].n, p.apps, p.id);
+    limits[p.id] = rows[0].n;
   }
-  assert.deepEqual([PLANS.free.apps, PLANS.pro.apps, PLANS.scale.apps], [1, 5, 25]);
-  assert.deepEqual([PLANS.pro.priceInr, PLANS.scale.priceInr], [2499, 8499]);
+  assert.equal(limits.free, PLANS.free.apps);
+  assert.equal(limits.pro, UNLIMITED_SQL);
+  assert.equal(PLANS.pro.apps, Infinity);
+  assert.equal(PLANS.pro.priceInr, 2499);
+  assert.equal(PLANS.free.downloads, false);
+  assert.equal(PLANS.pro.downloads, true);
 });
 
 // ---- input hardening --------------------------------------------------------

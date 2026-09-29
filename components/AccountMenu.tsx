@@ -44,7 +44,7 @@ export default function AccountMenu({ onMe }: { onMe?: (me: Me) => void }) {
               <div className="menu-head">
                 <strong>{me.user.name ?? me.user.email}</strong>
                 <small>{me.user.email}</small>
-                <small>{me.used}/{me.limit} hosted apps</small>
+                <small>{me.plan === "pro" ? `pro · ${me.used} hosted app${me.used === 1 ? "" : "s"}` : "free plan"}</small>
               </div>
               <a role="menuitem" href="/dashboard">dashboard</a>
               <a role="menuitem" href="/pricing">plans &amp; billing</a>

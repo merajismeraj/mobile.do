@@ -17,7 +17,8 @@ export async function GET() {
         avatar: account.profile.avatar_url,
       },
       plan: account.plan,
-      limit: account.limit,
+      limit: Number.isFinite(account.limit) ? account.limit : null,
+      downloads: account.downloads,
       used: account.used,
       subscription: {
         status: account.profile.subscription_status,

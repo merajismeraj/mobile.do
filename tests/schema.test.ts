@@ -39,25 +39,21 @@ test("migration is idempotent and creates profiles on signup", async () => {
   assert.equal(await scalar(pg, `select plan from public.profiles where id = $1`, [uid]), "free");
 });
 
-test("free plan hosts exactly one app", async () => {
+test("free plan cannot publish", async () => {
   const pg = await db();
   const uid = await user(pg);
-  await addApp(pg, uid, "one");
-  await assert.rejects(addApp(pg, uid, "two"), /APP_LIMIT_REACHED/);
+  await assert.rejects(addApp(pg, uid, "one"), /APP_LIMIT_REACHED: Publishing apps needs Pro/);
 });
 
-test("active pro allows 5, scale allows 25", async () => {
+test("active pro publishes without a practical limit", async () => {
   const pg = await db();
   const uid = await user(pg);
   await pg.query(`update public.profiles set plan = 'pro', subscription_status = 'ACTIVE' where id = $1`, [uid]);
-  for (let i = 0; i < 5; i++) await addApp(pg, uid, `p${i}`);
-  await assert.rejects(addApp(pg, uid, "p5"), /APP_LIMIT_REACHED/);
-  await pg.query(`update public.profiles set plan = 'scale' where id = $1`, [uid]);
-  assert.equal(await scalar(pg, `select public.app_limit($1)`, [uid]), 25);
-  await addApp(pg, uid, "p5");
+  for (let i = 0; i < 40; i++) await addApp(pg, uid, `p${i}`);
+  assert.equal(await scalar(pg, `select count(*)::int from public.apps where user_id = $1`, [uid]), 40);
 });
 
-test("cancelled plan keeps access until period_end, then drops to free", async () => {
+test("cancelled pro keeps access until period_end, then drops to free", async () => {
   const pg = await db();
   const uid = await user(pg);
   await pg.query(
@@ -65,27 +61,35 @@ test("cancelled plan keeps access until period_end, then drops to free", async (
     [uid],
   );
   assert.equal(await scalar(pg, `select public.effective_plan($1)`, [uid]), "pro");
+  await addApp(pg, uid, "still-ok");
   await pg.query(`update public.profiles set period_end = now() - interval '1 minute' where id = $1`, [uid]);
   assert.equal(await scalar(pg, `select public.effective_plan($1)`, [uid]), "free");
 });
 
-test("on downgrade only the oldest N apps keep running", async () => {
+test("when pro lapses every hosted app pauses; renewing brings them back", async () => {
   const pg = await db();
   const uid = await user(pg);
   await pg.query(`update public.profiles set plan = 'pro', subscription_status = 'ACTIVE' where id = $1`, [uid]);
   const ids: string[] = [];
-  for (let i = 0; i < 3; i++) {
-    ids.push(((await addApp(pg, uid, `d${i}`)).rows[0] as { id: string }).id);
-    await pg.query(`update public.apps set created_at = now() + ($2 || ' seconds')::interval where id = $1`, [ids[i], String(i)]);
-  }
+  for (let i = 0; i < 3; i++) ids.push(((await addApp(pg, uid, `d${i}`)).rows[0] as { id: string }).id);
+  const running = () => Promise.all(ids.map((id) => scalar(pg, `select public.app_is_running($1)`, [id])));
+  assert.deepEqual(await running(), [true, true, true]);
   await pg.query(`update public.profiles set subscription_status = 'ON_HOLD', period_end = null where id = $1`, [uid]);
-  const running = await Promise.all(ids.map((id) => scalar(pg, `select public.app_is_running($1)`, [id])));
-  assert.deepEqual(running, [true, false, false]);
+  assert.deepEqual(await running(), [false, false, false]);
+  await pg.query(`update public.profiles set subscription_status = 'ACTIVE' where id = $1`, [uid]);
+  assert.deepEqual(await running(), [true, true, true]);
+});
+
+test("plan column only accepts free or pro", async () => {
+  const pg = await db();
+  const uid = await user(pg);
+  await assert.rejects(pg.query(`update public.profiles set plan = 'scale' where id = $1`, [uid]), /check/i);
 });
 
 test("slug and size constraints", async () => {
   const pg = await db();
   const uid = await user(pg);
+  await pg.query(`update public.profiles set plan = 'pro', subscription_status = 'ACTIVE' where id = $1`, [uid]);
   await assert.rejects(addApp(pg, uid, "Bad Slug"), /check/i);
   await assert.rejects(addApp(pg, uid, "-lead"), /check/i);
 });

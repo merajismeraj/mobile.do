@@ -188,8 +188,10 @@ ${SYSTEM_PROMPT.replace(/^[\s\S]*?MOBILE APP QUALITY BAR\n/, "")}
 
 export interface Me {
   user: { email: string; name: string | null; avatar: string | null } | null;
-  plan?: "free" | "pro" | "scale";
-  limit?: number;
+  plan?: "free" | "pro";
+  /** Hosted app limit; null = unlimited. */
+  limit?: number | null;
+  downloads?: boolean;
   used?: number;
   subscription?: { status: string | null; periodEnd: string | null; plan: string };
   features: { accounts: boolean; billing: boolean; domains: boolean };

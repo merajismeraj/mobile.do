@@ -73,17 +73,17 @@ components/        Studio UI + BYOK settings
 
 ## Plans, accounts and hosting
 
-| Plan | Price | Hosted apps |
+| Plan | Price | What you get |
 |---|---|---|
-| Free | ₹0 | 1 |
-| Pro | ₹2,499 / month | 5 |
-| Scale | ₹8,499 / month | 25 |
-
-Generating is always free (users bring their own AI key). Plans limit how many apps a user keeps **published**. Every hosted app gets a URL on `APPS_HOST` and can have its own custom domain.
+| Free | ₹0 | Unlimited generation, refinement and live preview. No account needed. |
+| Pro | ₹2,499 / month (about $30) | Unlimited apps: downloads (HTML, PWA + iOS/Android zip, Claude Code kit), source-code view, and hosting with a custom domain per app |
 
 - **Accounts:** Google sign-in through Supabase Auth.
-- **Quota:** enforced in Postgres by a trigger (`enforce_app_quota`), so it holds even under concurrent requests.
-- **Billing:** Cashfree Subscriptions, charged monthly in INR by UPI Autopay, card or eNACH. After cancelling, users keep the plan until the end of the paid month. If a plan lapses, only the oldest N apps keep running and the rest show a "paused" page. Nothing is deleted.
+- **Billing:** Cashfree Subscriptions, charged monthly in INR by UPI Autopay, card or eNACH. Users can cancel anytime and keep Pro until the end of the paid month. After that, hosted apps pause (they aren't deleted) until the user renews.
+- **Enforcement:**
+  - Hosting is enforced in Postgres. A trigger allows free accounts 0 published apps and Pro accounts unlimited.
+  - Downloads and the code view are gated in the studio UI. The generated app is assembled in the browser, so a determined user could still copy it from devtools.
+  - The paywall only turns on once accounts and Cashfree are configured; until then downloads stay open.
 - **Isolation:** hosted apps are served from `APPS_HOST` or the app's custom domain, never from the studio origin. Their code therefore can't read the studio session or the API keys in its localStorage.
 
 ### Setup
@@ -101,11 +101,11 @@ All variables are listed in `.env.example`. Set them in Vercel → Project → S
 3. **Cashfree**
    - Enable Subscriptions on your account, then copy the App ID and Secret Key (use sandbox keys first).
    - Add a webhook for subscription events pointing to `APP_URL/api/billing/webhook`.
-   - The plans (`mobiledo_pro_inr_2499_monthly`, `mobiledo_scale_inr_8499_monthly`) are created automatically on the first checkout.
+   - The plan (`mobiledo_pro_inr_2499_monthly`) is created automatically on the first checkout.
 4. **Apps host:** add `APPS_HOST` (for example `mobile-do-apps.vercel.app`) as a domain on this Vercel project.
 5. **Custom domains:** create a Vercel access token scoped to this team. Users then connect domains from their dashboard and are shown the DNS records to add.
 
-Each feature switches itself off cleanly while its variables are missing: the studio keeps working, and pricing shows "coming soon".
+Each feature switches itself off cleanly while its variables are missing: the studio keeps working with downloads open, and pricing shows "coming soon".
 
 ## Deployment
 

@@ -81,7 +81,6 @@ export default function Dashboard() {
 
   const plan = PLANS[me.plan ?? "free"];
   const sub = me.subscription;
-  const pct = Math.min(100, ((me.used ?? 0) / (me.limit ?? 1)) * 100);
   const cancelled = sub?.status === "CANCELLED" || sub?.status === "CUSTOMER_CANCELLED";
 
   return (
@@ -97,10 +96,11 @@ export default function Dashboard() {
           <h2>
             {plan.name} plan {plan.priceInr > 0 && <small>{formatInr(plan.priceInr)}/month</small>}
           </h2>
-          <div className="usage" aria-label={`${me.used} of ${me.limit} hosted apps used`}>
-            <div className="bar"><span style={{ width: `${pct}%` }} /></div>
-            <span>{me.used}/{me.limit} hosted apps</span>
-          </div>
+          <p className="usage">
+            {plan.id === "pro"
+              ? `${me.used} hosted app${me.used === 1 ? "" : "s"} · unlimited apps, downloads and custom domains`
+              : "Generate and preview for free. Upgrade to download apps and host them."}
+          </p>
           {sub?.status === "ACTIVE" && <p className="hint">Renews monthly · next charge by {fmtDate(sub.periodEnd && new Date(new Date(sub.periodEnd).getTime() - 3 * 864e5).toISOString())}</p>}
           {cancelled && plan.id !== "free" && <p className="hint">Cancelled · access until {fmtDate(sub?.periodEnd)}</p>}
           {sub?.status && !["ACTIVE", "CANCELLED", "CUSTOMER_CANCELLED"].includes(sub.status) && plan.id === "free" && (
@@ -108,14 +108,14 @@ export default function Dashboard() {
           )}
         </div>
         <div className="plan-actions">
-          <a className="btn primary sm" href="/pricing">{plan.id === "scale" ? "change plan" : "upgrade"}</a>
+          {plan.id === "free" && <a className="btn primary sm" href="/pricing">upgrade to Pro</a>}
           {sub?.status === "ACTIVE" && <button className="btn ghost sm" onClick={cancelPlan}>cancel subscription</button>}
         </div>
       </section>
 
       {apps.length === 0 ? (
         <section className="card empty-card">
-          <p>No hosted apps yet. Generate one in the studio and hit <b>publish</b>.</p>
+          <p>{plan.id === "pro" ? <>No hosted apps yet. Generate one in the studio and hit <b>publish</b>.</> : "Hosted apps appear here once you're on Pro."}</p>
           <a className="btn primary sm" href="/">open studio</a>
         </section>
       ) : (
@@ -186,7 +186,7 @@ function AppItem({ app, domainsEnabled, onDelete, onChange }: { app: HostedApp; 
           </h3>
           <a href={app.url} target="_blank" rel="noreferrer">{app.url.replace(/^https?:\/\//, "")}</a>
           <small>published {fmtDate(app.created_at)} · updated {fmtDate(app.updated_at)}</small>
-          {!app.running && <small className="warn-text">Over your plan limit. Upgrade or delete another app to bring it back.</small>}
+          {!app.running && <small className="warn-text">Paused because your Pro plan ended. Renew to bring it back online.</small>}
         </div>
         <button className="btn ghost sm danger" onClick={onDelete}>delete</button>
       </div>

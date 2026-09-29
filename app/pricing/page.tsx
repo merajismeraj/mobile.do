@@ -4,7 +4,7 @@ import PricingTable from "@/components/PricingTable";
 
 export const metadata: Metadata = {
   title: "Pricing — mobile.do",
-  description: "Free for one hosted app. Pro ₹2,499/mo for 5 apps, Scale ₹8,499/mo for 25. Cancel anytime.",
+  description: "Generate and preview free. Pro is ₹2,499/month for unlimited apps, downloads and hosting. Cancel anytime.",
 };
 
 export default function PricingPage() {
@@ -14,29 +14,29 @@ export default function PricingPage() {
       <main className="page">
         <section className="page-head">
           <p className="eyebrow">$ pricing</p>
-          <h1>Simple monthly plans. Cancel anytime.</h1>
+          <h1>One plan. Unlimited apps. Cancel anytime.</h1>
           <p className="lede">
-            Generating apps is always free with your own AI key. Plans set how many apps you can keep live on
-            mobile.do, each with its own custom domain.
+            Generate and preview as many apps as you like for free with your own AI key. Go Pro to download them as
+            PWA, iOS and Android projects, and to host them on your own domains.
           </p>
         </section>
         <PricingTable />
         <section className="faq">
           <div>
-            <h3>What counts as an app?</h3>
-            <p>An app you publish from the studio and keep hosted. Drafts, previews and downloads don&apos;t count. Delete an app to free its slot.</p>
+            <h3>What&apos;s free?</h3>
+            <p>Everything up to the download: generating from a URL or prompt, refining, and the live phone preview. No account needed.</p>
+          </div>
+          <div>
+            <h3>What does Pro unlock?</h3>
+            <p>Downloads (single HTML, PWA + iOS/Android project zip, Claude Code kit) and hosting unlimited apps with a custom domain each.</p>
           </div>
           <div>
             <h3>How am I billed?</h3>
-            <p>Monthly in INR through Cashfree using UPI Autopay, card or eNACH. A ₹1 check authorises the mandate and is refunded; the first monthly charge follows within a day.</p>
+            <p>₹2,499 a month in INR through Cashfree using UPI Autopay, card or eNACH. A ₹1 check authorises the mandate and is refunded; the first monthly charge follows within a day.</p>
           </div>
           <div>
             <h3>Can I cancel anytime?</h3>
-            <p>Yes, from your dashboard. You keep your plan until the end of the paid month. After that, apps beyond the free limit pause until you upgrade again. Nothing is deleted.</p>
-          </div>
-          <div>
-            <h3>Do I pay for AI usage?</h3>
-            <p>No. You bring your own key (OpenAI, Claude, Gemini, Grok and more) and pay your provider directly.</p>
+            <p>Yes, from your dashboard. Pro stays active until the end of the paid month. After that, hosted apps pause until you renew. Nothing you downloaded or published is deleted.</p>
           </div>
         </section>
       </main>
