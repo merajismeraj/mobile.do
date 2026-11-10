@@ -119,3 +119,9 @@ test("all requested providers are registered", () => {
     assert.ok(names.includes(n), n);
   }
 });
+
+test("welcome copy fits in 140 characters", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("../components/WelcomeModal.tsx", import.meta.url), "utf8");
+  const copy = src.match(/WELCOME_COPY =\s*"([^"]+)"/)![1];
+  assert.ok(copy.length <= 140, `${copy.length} chars`);
+});
