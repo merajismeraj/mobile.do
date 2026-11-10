@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isStudioHost } from "./lib/hosts";
 
 // Host routing:
 //  - APPS_HOST (e.g. mobile-do-apps.vercel.app/<slug>/...) → hosted apps by slug
@@ -7,22 +8,6 @@ import { createServerClient } from "@supabase/ssr";
 //  - everything else                                       → the mobile.do studio
 // Hosted apps run on a different origin from the studio, so their code can never
 // read the studio's session cookies or the API keys kept in its localStorage.
-
-function isStudioHost(host: string): boolean {
-  const appHost = (() => {
-    try {
-      return new URL(process.env.APP_URL ?? "").host;
-    } catch {
-      return "";
-    }
-  })();
-  return (
-    host === appHost ||
-    host.startsWith("localhost") ||
-    host.startsWith("127.0.0.1") ||
-    (host.endsWith(".vercel.app") && host !== process.env.APPS_HOST)
-  );
-}
 
 export async function proxy(req: NextRequest) {
   const host = (req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "").toLowerCase();
@@ -34,7 +19,7 @@ export async function proxy(req: NextRequest) {
     url.pathname = `/hosted/apps${pathname}`;
     return NextResponse.rewrite(url);
   }
-  if (!isStudioHost(host)) {
+  if (!isStudioHost(host, process.env.APP_URL, appsHost)) {
     const url = req.nextUrl.clone();
     url.pathname = `/hosted/domain/${encodeURIComponent(host)}${pathname}`;
     return NextResponse.rewrite(url);
