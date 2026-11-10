@@ -365,3 +365,13 @@ a.brand { color: inherit; text-decoration: none; }
 .paywall-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
 .paywall-list li::before { content: "✓ "; color: var(--green); }
 .locked-code { background-image: none; }
+
+/* ---- welcome ---- */
+.modal.welcome { width: min(420px, calc(100vw - 32px)); }
+.welcome .modal-body { gap: 14px; padding: 22px; }
+.welcome-brand { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
+.welcome-brand b { color: var(--green); font-weight: 600; }
+.welcome p { margin: 0; font-size: 13.5px; line-height: 1.65; color: var(--text); }
+.modal.welcome[open] { animation: welcome-in 0.18s ease-out; }
+@keyframes welcome-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .modal.welcome[open] { animation: none; } }
